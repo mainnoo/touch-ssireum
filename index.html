@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>터치 씨름</title>
+<meta name="description" content="모래판을 터치해 이길 확률을 올리고 연승에 도전하는 씨름 게임">
+<meta name="theme-color" content="#1E4FD8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #E6ECF5;
+    --surface: #FFFFFF;
+    --ink: #14213D;
+    --muted: #56657F;
+    --sand: #E6C487;
+    --sand-deep: #C89A52;
+    --rim: #FBF7EC;
+    --track: #C6D0E2;
+    --blue: #1E4FD8;
+    --on-blue: #FFFFFF;
+    --red: #D7263D;
+    --skin: #F0C9A0;
+    --hair: #1C1B1F;
+    --display: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --body: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0D1630;
+      --surface: #182449;
+      --ink: #EEF2FA;
+      --muted: #A3B2D0;
+      --sand: #C8A465;
+      --sand-deep: #9C7A3C;
+      --rim: #26335F;
+      --track: #34447A;
+      --blue: #7DA0FF;
+      --on-blue: #0D1630;
+      --red: #FF6B7C;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0D1630;
+    --surface: #182449;
+    --ink: #EEF2FA;
+    --muted: #A3B2D0;
+    --sand: #C8A465;
+    --sand-deep: #9C7A3C;
+    --rim: #26335F;
+    --track: #34447A;
+    --blue: #7DA0FF;
+    --on-blue: #0D1630;
+    --red: #FF6B7C;
+  }
+
+  *, *::before, *::after { box-sizing: inherit; }
+  html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    height: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .score {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+    color: var(--muted);
+  }
+  .score b {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 24px;
+    color: var(--ink);
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rank-open {
+    border: 0;
+    border-radius: 999px;
+    padding: 9px 16px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .rank-open:disabled { opacity: .4; cursor: default; }
+  .rank-open:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  .rank {
+    position: fixed;
+    inset: 0;
+    z-index: 8;
+    background: var(--bg);
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  .rank[hidden] { display: none; }
+  .rank-inner {
+    max-width: 440px;
+    height: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .rank h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 34px; }
+  .rank-week { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .rank-mine { margin: 14px 0 6px; font-weight: 700; font-size: 16px; color: var(--blue); }
+  .rank-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .rank-list li {
+    display: grid;
+    grid-template-columns: 2.4em 1fr auto;
+    align-items: baseline;
+    gap: 8px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--track);
+    font-size: 16px;
+  }
+  .rank-list .pos { font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+  .rank-list .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-list .pts { font-family: var(--display); font-size: 20px; font-variant-numeric: tabular-nums; }
+  .rank-list li.me .who { color: var(--blue); font-weight: 700; }
+  .rank-note { margin: 12px 0; color: var(--muted); font-size: 14px; line-height: 1.5; min-height: 1.5em; }
+
+  .cheer-badge {
+    border-radius: 999px;
+    padding: 7px 13px;
+    background: #F2C230;
+    color: #3A2A00;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .rank-open[hidden], .cheer-badge[hidden] { display: none; }
+
+  .foe-info { text-align: center; }
+  .foe-order { margin: 0; font-size: 14px; color: var(--muted); }
+  .foe-name {
+    margin: 2px 0 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 36px;
+    line-height: 1.1;
+    color: var(--red);
+  }
+
+  .ring-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ring {
+    position: relative;
+    width: min(100%, 40vh, 420px);
+    width: min(100%, 40dvh, 420px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    touch-action: none;
+    cursor: pointer;
+    outline-offset: 6px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ring:focus-visible, .btn:focus-visible { outline: 3px solid var(--ink); }
+  .ring svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+  .fighter, .pump {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .fighter { transition: transform .45s cubic-bezier(.2, .8, .2, 1), opacity .45s; }
+  .ring.clash .hero { transform: translate(26px, 0); }
+  .ring.clash .foe  { transform: translate(-26px, 0); }
+  .ring.clash .pair { animation: shake .16s linear infinite; }
+  .ring.win .hero   { transform: translate(40px, 0); }
+  .ring.win .foe    { transform: translate(120px, -30px) rotate(50deg); opacity: 0; }
+  .ring.lose .foe   { transform: translate(-40px, 0); }
+  .ring.lose .hero  { transform: translate(-120px, 30px) rotate(-50deg); opacity: 0; }
+  @keyframes shake {
+    0%   { transform: translate(0, 0); }
+    25%  { transform: translate(3px, -2px); }
+    50%  { transform: translate(-3px, 2px); }
+    75%  { transform: translate(2px, 2px); }
+    100% { transform: translate(0, 0); }
+  }
+
+  .pop {
+    position: absolute;
+    pointer-events: none;
+    font-family: var(--display);
+    font-size: 18px;
+    color: var(--blue);
+    text-shadow: 0 1px 0 var(--rim);
+    animation: pop .6s ease-out forwards;
+  }
+  @keyframes pop {
+    from { opacity: 1; transform: translate(-50%, -60%); }
+    to   { opacity: 0; transform: translate(-50%, -220%); }
+  }
+
+  .pop.big { font-size: 30px; color: var(--ink); }
+
+  .muscle {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    margin: -32px 0 0 -32px;
+    display: grid;
+    place-items: center;
+    font-size: 38px;
+    line-height: 1;
+    border-radius: 50%;
+    background: var(--rim);
+    box-shadow: 0 0 0 3px var(--ink);
+    cursor: pointer;
+    animation: muscleIn .18s ease-out;
+  }
+  @keyframes muscleIn { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .meter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 16px;
+  }
+  .stat span { display: block; font-size: 14px; color: var(--muted); }
+  .stat b {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 34px;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat.chance b { color: var(--blue); }
+  .stat.time { text-align: right; }
+  .stat b.frozen { color: var(--blue); }
+
+  .items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .item {
+    border: 0;
+    border-radius: 12px;
+    padding: 9px 4px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.35;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .item small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+  .item:disabled { opacity: .4; cursor: default; }
+  .item:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  .hint {
+    grid-column: 1 / -1;
+    margin: 4px 0 0;
+    text-align: center;
+    font-size: 15px;
+    min-height: 1.5em;
+  }
+
+  .sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--surface);
+    border-radius: 22px 22px 0 0;
+    padding: 22px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 32px rgba(10, 20, 50, .22);
+    animation: rise .28s ease-out;
+    z-index: 5;
+  }
+  .sheet[hidden], .ad[hidden], .btn[hidden] { display: none; }
+  .sheet-inner { max-width: 440px; margin: 0 auto; }
+  .sheet h2 {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 32px;
+  }
+  .sheet p { margin: 8px 0 16px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  @keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .btn {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 14px;
+    padding: 17px 16px;
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn-main { background: var(--blue); color: var(--on-blue); }
+  .btn-sub { background: transparent; color: var(--muted); margin-top: 6px; }
+
+  .ad {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: #000;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+  }
+  .ad-tag { font-size: 13px; border: 1px solid rgba(255, 255, 255, .5); border-radius: 6px; padding: 3px 8px; }
+  .ad h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 30px; }
+  .ad p { margin: 0; color: #C9CFDB; font-size: 15px; line-height: 1.5; max-width: 30ch; }
+  .ad .btn { max-width: 320px; margin-top: 12px; background: #fff; color: #000; }
+
+  /* 외부 글꼴을 쓰지 않으므로 제목용 글자를 굵게 표시해요 */
+  .score b, .foe-name, .stat b, .sheet h2, .rank h2, .pop, .item span,
+  .rank-list .pos, .rank-list .pts { font-weight: 800; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ring.clash .pair, .sheet { animation: none; }
+    .fighter { transition: opacity .2s; }
+    .pop { animation-duration: .01s; }
+    .muscle { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="score">
+    <div>연승<b id="streak">0</b></div>
+    <button class="rank-open" id="rankOpen" type="button">주간 랭킹</button>
+    <button class="rank-open" id="cheerBtn" type="button" hidden>응원하기</button>
+    <span class="cheer-badge" id="cheerBadge" hidden>★ 응원 배지</span>
+    <div>최고<b id="best">0</b></div>
+  </header>
+
+  <section class="foe-info">
+    <p class="foe-order" id="foeOrder">1번째 상대</p>
+    <h1 class="foe-name" id="foeName">동네 꼬마</h1>
+  </section>
+
+  <div class="ring-wrap">
+    <div class="ring" id="ring" role="button" tabindex="0" aria-label="모래판. 터치하면 이길 확률이 올라가요">
+      <svg viewBox="0 0 320 320" aria-hidden="true">
+        <circle cx="160" cy="160" r="152" fill="var(--rim)"/>
+        <circle cx="160" cy="160" r="152" fill="none" stroke="var(--track)" stroke-width="8"/>
+        <circle id="timerArc" cx="160" cy="160" r="152" fill="none" stroke="var(--ink)" stroke-width="8"
+                stroke-linecap="round" transform="rotate(-90 160 160)"/>
+        <circle cx="160" cy="160" r="140" fill="var(--sand)"/>
+        <circle cx="160" cy="160" r="98" fill="none" stroke="var(--sand-deep)" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+
+        <g class="pair">
+          <g class="fighter hero">
+            <g class="pump" id="heroPump">
+              <g transform="translate(112 160)">
+                <ellipse cx="16" cy="-22" rx="16" ry="8" fill="var(--skin)" transform="rotate(-22 16 -22)"/>
+                <ellipse cx="16" cy="22" rx="16" ry="8" fill="var(--skin)" transform="rotate(22 16 22)"/>
+                <ellipse cx="0" cy="0" rx="22" ry="32" fill="var(--skin)"/>
+                <rect x="-17" y="-26" width="10" height="52" rx="5" fill="var(--blue)"/>
+                <circle cx="8" cy="0" r="14" fill="var(--hair)"/>
+                <polygon id="heroStar" points="-3.0,-24.0 -1.2,-19.4 3.7,-19.2 -0.1,-16.1 1.1,-11.3 -3.0,-14.0 -7.1,-11.3 -5.9,-16.1 -9.7,-19.2 -4.8,-19.4" fill="#F2C230" stroke="#14213D" stroke-width="1.2" stroke-linejoin="round" style="display:none"/>
+              </g>
+            </g>
+          </g>
+          <g class="fighter foe">
+            <g id="foeBody" transform="translate(208 160) scale(-1 1)">
+              <ellipse cx="16" cy="-22" rx="16" ry="8" fill="var(--skin)" transform="rotate(-22 16 -22)"/>
+              <ellipse cx="16" cy="22" rx="16" ry="8" fill="var(--skin)" transform="rotate(22 16 22)"/>
+              <ellipse cx="0" cy="0" rx="22" ry="32" fill="var(--skin)"/>
+              <rect x="-17" y="-26" width="10" height="52" rx="5" fill="var(--red)"/>
+              <circle cx="8" cy="0" r="14" fill="var(--hair)"/>
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <section class="meter">
+    <div class="stat chance"><span>이길 확률</span><b id="chance">45.0%</b></div>
+    <div class="stat time"><span>남은 터치 시간</span><b id="time">10.0초</b></div>
+    <p class="hint" id="hint" role="status">모래판을 터치하면 시작해요</p>
+  </section>
+
+  <section class="items" aria-label="아이템">
+    <button class="item" id="itemTime" type="button"></button>
+    <button class="item" id="itemFreeze" type="button"></button>
+    <button class="item" id="itemBoost" type="button"></button>
+  </section>
+</main>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-inner">
+    <h2 id="sheetTitle"></h2>
+    <p id="sheetBody"></p>
+    <button class="btn btn-main" id="btnMain" type="button"></button>
+    <button class="btn btn-sub" id="btnSub" type="button"></button>
+  </div>
+</div>
+
+<div class="rank" id="rank" hidden role="dialog" aria-modal="true" aria-labelledby="rankTitle">
+  <div class="rank-inner">
+    <h2 id="rankTitle">주간 랭킹</h2>
+    <p class="rank-week" id="rankWeek"></p>
+    <p class="rank-mine" id="rankMine"></p>
+    <ol class="rank-list" id="rankList"></ol>
+    <p class="rank-note" id="rankNote" role="status"></p>
+    <button class="btn btn-main" id="rankClose" type="button">닫기</button>
+  </div>
+</div>
+
+<div class="ad" id="ad" hidden>
+  <span class="ad-tag">광고</span>
+  <h2></h2>
+  <p></p>
+  <p id="adCount"></p>
+  <button class="btn" id="adClose" type="button" disabled>닫고 다시 싸우기</button>
+</div>
+
+<script>
+// 설치형 앱으로 동작하고, 인터넷이 없어도 열리게 해요
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+
+(function () {
+  // 여기 숫자만 바꾸면 게임 밸런스가 바뀌어요
+  var CONFIG = {
+    baseChance: 45,   // 기본 승률 (%). 광고 3번을 다 쓰면 평균 약 5.3연승 (초당 7번 터치 기준)
+    perTouch: 0.3,    // 터치 1번에 오르는 승률 (%)
+    musclePer: 1,     // 알통 1번 터치에 오르는 승률 (%)
+    muscleLifeMs: 1000,          // 알통이 떠 있는 시간 (0연승 기준)
+    muscleLifeStepMs: 100,       // 1연승마다 줄어드는 알통 시간
+    muscleLifeMinMs: 300,        // 알통 시간 하한
+    muscleCount: 5,              // 한 판에 알통이 나오는 횟수
+    muscleCountLate: 3,          // 연승이 쌓인 뒤의 알통 횟수
+    muscleLateFrom: 5,           // 몇 연승부터 줄일지
+    maxChance: 100,   // 승률 상한 (%)
+    startTime: 10,    // 첫 판 터치 시간 (초)
+    timeStep: 0.5,    // 1승마다 줄어드는 터치 시간 (초)
+    minTime: 2,       // 터치 시간 하한 (초)
+    clashMs: 1300,    // 전투 연출 길이
+    adSeconds: 5,     // 가짜 광고 길이 (초)
+    maxAds: 3,        // 한 게임에서 광고로 다시 싸울 수 있는 횟수
+    itemMinStreak: 7, // 몇 연승 이상으로 끝나야 아이템 추첨을 하는지
+    itemChance: 0.5,  // 아이템이 나올 확률 (0~1)
+    // 아이템 세기: 하나당 승률 약 +6%p가 되도록 맞췄어요 (초당 7번 터치 기준, 1초 = 약 2.1%p)
+    itemTimeSec: 3,     // 시간 아이템이 늘려주는 시간 (초)
+    itemFreezeMs: 2500, // 멈춤 아이템이 시간을 멈추는 길이. 멈춘 동안 알통도 사라지지 않아요
+    itemBoost: 6,       // 확률 아이템이 올려주는 승률 (%)
+    starterItems: 0   // 처음 열었을 때 주는 종류별 아이템 수
+  };
+  var ITEMS = {
+    time:   { id: 'itemTime',   name: '시간 +' + CONFIG.itemTimeSec + '초' },
+    freeze: { id: 'itemFreeze', name: (CONFIG.itemFreezeMs / 1000) + '초 멈춤' },
+    boost:  { id: 'itemBoost',  name: '확률 +' + CONFIG.itemBoost + '%' }
+  };
+  var ITEM_KEYS = ['time', 'freeze', 'boost'];
+  var INV_KEY = 'touch-ssireum-items';
+  var DAILY_KEY = 'touch-ssireum-daily';
+  var FOES = ['동네 꼬마', '옆집 형', '골목 대장', '시장 장사', '읍내 장사',
+              '군 대표', '도 대표', '금강장사', '한라장사', '백두장사', '천하장사'];
+  var ARC = 2 * Math.PI * 152;
+  var BEST_KEY = 'touch-ssireum-best';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var ring = $('ring'), arc = $('timerArc'), heroPump = $('heroPump'), foeBody = $('foeBody');
+  var elStreak = $('streak'), elBest = $('best'), elOrder = $('foeOrder'), elName = $('foeName');
+  var elChance = $('chance'), elTime = $('time'), elHint = $('hint');
+  var sheet = $('sheet'), sheetTitle = $('sheetTitle'), sheetBody = $('sheetBody');
+  var cheerBtn = $('cheerBtn'), cheerBadge = $('cheerBadge'), heroStar = $('heroStar');
+  var btnMain = $('btnMain'), btnSub = $('btnSub');
+  var ad = $('ad'), adCount = $('adCount'), adClose = $('adClose');
+  var rank = $('rank'), rankOpen = $('rankOpen'), rankClose = $('rankClose');
+  var rankWeek = $('rankWeek'), rankMine = $('rankMine'), rankList = $('rankList'), rankNote = $('rankNote');
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var state = 'idle';   // idle → charging → clash → win | lose
+  var streak = 0, best = 0, touches = 0, duration = CONFIG.startTime;
+  var left = 0, total = 0, lastTs = 0, frozenMs = 0;   // 남은 시간, 원 한 바퀴 기준, 직전 프레임, 남은 멈춤 시간
+  var adsUsed = 0, bonus = 0, usedItem = {};
+  var inv = { time: 0, freeze: 0, boost: 0 };
+  var muscleHits = 0, muscleTimers = [];
+  var mainAction = null, subAction = null;
+
+  try { best = parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) { best = 0; }
+
+  // 아이템 보관함: 이 기기에만 저장돼요
+  (function loadInv() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(INV_KEY)); } catch (e) { saved = null; }
+    ITEM_KEYS.forEach(function (k) {
+      var n = saved ? Math.floor(Number(saved[k])) : CONFIG.starterItems;
+      inv[k] = isFinite(n) && n > 0 ? n : 0;
+    });
+  })();
+  function saveInv() {
+    try { localStorage.setItem(INV_KEY, JSON.stringify(inv)); } catch (e) {}
+  }
+
+  function chance() {
+    var c = CONFIG.baseChance + touches * CONFIG.perTouch + muscleHits * CONFIG.musclePer + bonus;
+    return Math.min(CONFIG.maxChance, Math.round(c * 10) / 10);
+  }
+  function touchTime(wins) {
+    var t = CONFIG.startTime - wins * CONFIG.timeStep;
+    return Math.max(CONFIG.minTime, Math.round(t * 10) / 10);
+  }
+
+  function muscleLife(wins) {
+    return Math.max(CONFIG.muscleLifeMinMs, CONFIG.muscleLifeMs - wins * CONFIG.muscleLifeStepMs);
+  }
+
+  function renderTime() {
+    elTime.textContent = left.toFixed(1) + '초';
+    elTime.classList.toggle('frozen', frozenMs > 0);
+    arc.setAttribute('stroke-dasharray', ARC.toFixed(1));
+    arc.setAttribute('stroke-dashoffset', (ARC * (1 - Math.min(1, left / total))).toFixed(1));
+  }
+  function renderChance() { elChance.textContent = chance().toFixed(1) + '%'; }
+
+  function setup() {
+    state = 'idle';
+    rankOpen.disabled = false;
+    cheerBtn.disabled = false;
+    touches = 0;
+    muscleHits = 0;
+    clearMuscle();
+    duration = touchTime(streak);
+    left = duration;
+    total = duration;
+    frozenMs = 0;
+    bonus = 0;
+    usedItem = {};
+    ring.classList.remove('clash', 'win', 'lose');
+    elStreak.textContent = streak;
+    elBest.textContent = best;
+    elOrder.textContent = (streak + 1) + '번째 상대';
+    elName.textContent = FOES[Math.min(streak, FOES.length - 1)];
+    var s = 1 + Math.min(streak, 10) * 0.035;
+    foeBody.setAttribute('transform', 'translate(208 160) scale(' + (-s) + ' ' + s + ')');
+    renderChance();
+    renderTime();
+    renderItems();
+    elHint.textContent = '모래판을 터치하면 시작해요';
+  }
+
+  function tick(now) {
+    if (state !== 'charging') return;
+    var dt = now - lastTs;
+    lastTs = now;
+    if (frozenMs > 0) {
+      var f = Math.min(frozenMs, dt);
+      frozenMs -= f;
+      dt -= f;
+    }
+    left = Math.max(0, left - dt / 1000);
+    // 알통 수명도 같은 시계로 깎아서, 멈춤 중에는 알통이 그대로 떠 있어요
+    var ms = ring.querySelectorAll('.muscle');
+    for (var i = 0; i < ms.length; i++) {
+      ms[i]._life -= dt;
+      if (ms[i]._life <= 0) ms[i].remove();
+    }
+    renderTime();
+    if (left <= 0) { clash(); return; }
+    requestAnimationFrame(tick);
+  }
+
+  function touch(x, y) {
+    if (state === 'idle') {
+      state = 'charging';
+      rankOpen.disabled = true;   // 싸우는 중에는 랭킹을 열 수 없어요
+      cheerBtn.disabled = true;   // 응원하기는 다음 판을 시작하기 전에만 열 수 있어요
+      lastTs = performance.now();
+      elHint.textContent = '계속 터치하세요. 알통을 누르면 +' + CONFIG.musclePer + '%';
+      requestAnimationFrame(tick);
+      scheduleMuscles();
+    }
+    if (state !== 'charging') return;
+    touches += 1;
+    renderChance();
+    if (!reduceMotion && heroPump.animate) {
+      heroPump.animate(
+        [{ transform: 'scale(1)' }, { transform: 'scale(1.1)' }, { transform: 'scale(1)' }],
+        { duration: 130 }
+      );
+    }
+    showPop(x, y, '+' + CONFIG.perTouch + '%', false);
+  }
+
+  function showPop(x, y, text, big) {
+    if (!big && ring.querySelectorAll('.pop').length >= 24) return;
+    var pop = document.createElement('span');
+    pop.className = big ? 'pop big' : 'pop';
+    pop.textContent = text;
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    pop.addEventListener('animationend', function () { pop.remove(); });
+    ring.appendChild(pop);
+  }
+
+  // 알통: 한 판에 정해진 횟수만큼, 터치 시간 안의 완전 랜덤한 순간에 나와요
+  function scheduleMuscles() {
+    var n = streak >= CONFIG.muscleLateFrom ? CONFIG.muscleCountLate : CONFIG.muscleCount;
+    // 알통이 떠 있는 시간만큼은 끝에서 남겨 둬서, 나오자마자 판이 끝나지 않게 해요
+    var span = Math.max(0, left * 1000 - muscleLife(streak));
+    for (var i = 0; i < n; i++) {
+      muscleTimers.push(setTimeout(spawnMuscle, Math.random() * span));
+    }
+  }
+  function spawnMuscle() {
+    if (state !== 'charging') return;
+    var R = ring.getBoundingClientRect().width / 2;
+    var others = ring.querySelectorAll('.muscle');
+    var x, y, a, d, tries = 0, clear;
+    do {
+      // 선수들이 서 있는 가운데 줄은 피해서 위쪽이나 아래쪽에 띄워요
+      do { a = Math.random() * Math.PI * 2; } while (Math.abs(Math.sin(a)) < 0.45);
+      d = R * (0.36 + Math.random() * 0.26);
+      x = R + Math.cos(a) * d;
+      y = R + Math.sin(a) * d;
+      clear = true;
+      for (var i = 0; i < others.length; i++) {
+        if (Math.hypot(x - parseFloat(others[i].style.left), y - parseFloat(others[i].style.top)) < 70) clear = false;
+      }
+      tries += 1;
+    } while (!clear && tries < 8);
+    var el = document.createElement('span');
+    el.className = 'muscle';
+    el.textContent = '\uD83D\uDCAA';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    ring.appendChild(el);
+    el._life = muscleLife(streak);   // 남은 수명(ms). tick()에서 깎아요
+  }
+  function clearMuscle() {
+    for (var i = 0; i < muscleTimers.length; i++) clearTimeout(muscleTimers[i]);
+    muscleTimers = [];
+    var all = ring.querySelectorAll('.muscle');
+    for (var j = 0; j < all.length; j++) all[j].remove();
+  }
+  function hitMuscle(el, x, y) {
+    if (state !== 'charging') return;
+    el.remove();
+    muscleHits += 1;
+    renderChance();
+    showPop(x, y, '+' + CONFIG.musclePer + '%', true);
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) {} }
+  }
+
+  // 모래판(원) 안쪽 터치만 인정
+  ring.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    var r = ring.getBoundingClientRect();
+    var x = e.clientX - r.left, y = e.clientY - r.top;
+    var m = e.target.closest ? e.target.closest('.muscle') : null;
+    if (m) { hitMuscle(m, x, y); return; }
+    if (Math.hypot(x - r.width / 2, y - r.height / 2) > r.width / 2) return;
+    touch(x, y);
+  });
+  ring.addEventListener('keydown', function (e) {
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    e.preventDefault();
+    if (e.repeat) return;
+    var r = ring.getBoundingClientRect();
+    touch(r.width / 2, r.height / 2);
+  });
+
+  function clash() {
+    state = 'clash';
+    frozenMs = 0;
+    renderItems();
+    clearMuscle();
+    ring.classList.add('clash');
+    elHint.textContent = '으랏차차!';
+    setTimeout(resolve, CONFIG.clashMs);
+  }
+
+  function resolve() {
+    var c = chance();
+    var won = Math.random() * 100 < c;
+    ring.classList.remove('clash');
+    rankOpen.disabled = false;
+    if (won) {
+      state = 'win';
+      streak += 1;
+      if (streak > myWeekBest) { myWeekBest = streak; saveWeekly(); }
+      if (streak > best) {
+        best = streak;
+        try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
+      }
+      elStreak.textContent = streak;
+      elBest.textContent = best;
+      ring.classList.add('win');
+      renderItems();
+      elHint.textContent = '';
+      openSheet(
+        '이겼어요',
+        streak + '연승이에요. 다음 판은 ' + touchTime(streak).toFixed(1) + '초 동안 터치할 수 있어요.',
+        '다음 상대와 싸우기', setup,
+        null, null
+      );
+    } else {
+      state = 'lose';
+      ring.classList.add('lose');
+      renderItems();
+      elHint.textContent = '';
+      var adsLeft = CONFIG.maxAds - adsUsed;
+      if (streak > 0 && adsLeft > 0) {
+        openSheet(
+          '졌어요',
+          '이길 확률은 ' + c.toFixed(1) + '%였어요. ' + streak + '연승을 지키고 같은 상대와 다시 싸울 수 있어요. ' +
+            '이번 게임에서 ' + adsLeft + '번 더 이어할 수 있어요.',
+          '이어서 다시 싸우기', function () { adsUsed += 1; setup(); },
+          '여기서 게임 끝내기', function () { endRun(''); }
+        );
+      } else if (streak > 0) {
+        endRun('졌어요. 이어하기 ' + CONFIG.maxAds + '번을 모두 썼어요. ');
+      } else {
+        openSheet(
+          '졌어요',
+          '이길 확률은 ' + c.toFixed(1) + '%였어요. 더 많이 터치하고 알통을 누르면 확률이 올라가요.',
+          '다시 싸우기', restart,
+          null, null
+        );
+      }
+    }
+  }
+
+  function openSheet(title, body, mainLabel, mainFn, subLabel, subFn) {
+    sheetTitle.textContent = title;
+    sheetBody.textContent = body;
+    btnMain.textContent = mainLabel;
+    mainAction = mainFn;
+    btnSub.hidden = !subLabel;
+    btnSub.textContent = subLabel || '';
+    subAction = subFn;
+    // 연타하던 손가락이 버튼을 잘못 누르지 않게 잠깐 잠가요
+    btnMain.disabled = true;
+    btnSub.disabled = true;
+    sheet.hidden = false;
+    setTimeout(function () {
+      btnMain.disabled = false;
+      btnSub.disabled = false;
+      btnMain.focus({ preventScroll: true });
+    }, 500);
+  }
+  function closeSheet() { sheet.hidden = true; }
+
+  btnMain.addEventListener('click', function () { var fn = mainAction; closeSheet(); if (fn) fn(); });
+  btnSub.addEventListener('click', function () { var fn = subAction; closeSheet(); if (fn) fn(); });
+
+  function restart() { streak = 0; adsUsed = 0; setup(); dailyGift(); }
+
+  // 하루 한 번 아이템: 한국 시간 기준으로 날짜가 바뀌면 3종 중 하나를 랜덤으로 줘요
+  function kstToday() {
+    var k = new Date(Date.now() + 9 * 3600 * 1000);
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return k.getUTCFullYear() + '-' + pad(k.getUTCMonth() + 1) + '-' + pad(k.getUTCDate());
+  }
+  function dailyGift() {
+    var today = kstToday(), last = null;
+    try { last = localStorage.getItem(DAILY_KEY); } catch (e) {}
+    if (last === today) return;
+    try { localStorage.setItem(DAILY_KEY, today); } catch (e) {}
+    var k = ITEM_KEYS[Math.floor(Math.random() * ITEM_KEYS.length)];
+    inv[k] += 1;
+    saveInv();
+    renderItems();
+    openSheet(
+      '오늘의 아이템',
+      '"' + ITEMS[k].name + '" 아이템을 받았어요. 내일 다시 오면 하나를 더 받을 수 있어요.',
+      '확인', null, null, null
+    );
+  }
+
+  // 게임이 끝날 때: 7연승 이상이면 확률로 아이템 1개
+  function rollItem() {
+    if (Math.random() >= CONFIG.itemChance) return null;
+    var k = ITEM_KEYS[Math.floor(Math.random() * ITEM_KEYS.length)];
+    inv[k] += 1;
+    saveInv();
+    renderItems();
+    return k;
+  }
+  function endRun(prefix) {
+    var msg = prefix + streak + '연승으로 끝났어요.';
+    if (streak >= CONFIG.itemMinStreak) {
+      var got = rollItem();
+      msg += got
+        ? ' 보상으로 "' + ITEMS[got].name + '" 아이템을 받았어요.'
+        : ' 이번에는 아이템이 나오지 않았어요.';
+    } else {
+      msg += ' ' + CONFIG.itemMinStreak + '연승 이상으로 끝나면 아이템이 나올 수 있어요.';
+    }
+    openSheet('게임이 끝났어요', msg, '처음부터 다시 하기', restart, null, null);
+  }
+
+  // 아이템: 싸우기 전이나 터치하는 동안, 한 판에 종류별로 1개씩 쓸 수 있어요
+  function canUseItems() { return state === 'idle' || state === 'charging'; }
+  function renderItems() {
+    ITEM_KEYS.forEach(function (k) {
+      var btn = $(ITEMS[k].id);
+      btn.textContent = '';
+      var name = document.createElement('span');
+      name.textContent = ITEMS[k].name;
+      var count = document.createElement('small');
+      count.textContent = usedItem[k] ? '이번 판에 사용함' : inv[k] + '개';
+      btn.appendChild(name);
+      btn.appendChild(count);
+      btn.disabled = !canUseItems() || inv[k] <= 0 || !!usedItem[k];
+    });
+  }
+  function useItem(k) {
+    if (!canUseItems() || inv[k] <= 0 || usedItem[k]) return;
+    inv[k] -= 1;
+    usedItem[k] = true;
+    saveInv();
+    if (k === 'time') {
+      left += CONFIG.itemTimeSec;
+      total = Math.max(total, left);
+    } else if (k === 'freeze') {
+      frozenMs += CONFIG.itemFreezeMs;
+    } else if (k === 'boost') {
+      bonus += CONFIG.itemBoost;
+    }
+    renderChance();
+    renderTime();
+    renderItems();
+  }
+  ITEM_KEYS.forEach(function (k) {
+    var btn = $(ITEMS[k].id);
+    // 다른 손가락으로 연타하는 중에도 눌리도록 pointerdown에서 바로 처리해요
+    btn.addEventListener('pointerdown', function (e) { e.preventDefault(); useItem(k); });
+    btn.addEventListener('click', function (e) { if (e.detail === 0) useItem(k); });   // 키보드
+  });
+
+  // 실제 앱에서는 이 자리에서 앱인토스 리워드 광고를 띄우고,
+  // 시청 완료 이벤트를 받은 뒤에 setup()을 호출하면 돼요.
+  function watchAd() {
+    var left = CONFIG.adSeconds;
+    ad.hidden = false;
+    adClose.disabled = true;
+    adCount.textContent = left + '초 남았어요';
+    var iv = setInterval(function () {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(iv);
+        adCount.textContent = '광고가 끝났어요';
+        adClose.disabled = false;
+        adClose.focus({ preventScroll: true });
+      } else {
+        adCount.textContent = left + '초 남았어요';
+      }
+    }, 1000);
+  }
+  adClose.addEventListener('click', function () { ad.hidden = true; adsUsed += 1; setup(); });
+
+  // ───── 주간 랭킹 ─────
+  // 점수는 "이번 주 최고 연승"이에요. 한 사람당 문서 하나(ranks/<내 id>)에
+  // { week, best, at }을 저장하고, 주가 바뀌면 새 주의 기록으로 덮어써요.
+  var db = null, userApi = null, uid = null;
+  var rankRows = [], rankState = 'loading';   // loading | ready | off
+  var myWeekBest = 0, savedBest = 0, saving = false, writeBlocked = false, retried = false;
+  var renderToken = 0;
+
+  // 보는 사람마다 주가 달라지지 않게 한국 시간 기준 월요일~일요일로 계산해요
+  var week = (function () {
+    var k = new Date(Date.now() + 9 * 3600 * 1000);
+    var dow = (k.getUTCDay() + 6) % 7;
+    var mon = new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate() - dow));
+    var sun = new Date(mon.getTime() + 6 * 86400000);
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return {
+      key: mon.getUTCFullYear() + '-' + pad(mon.getUTCMonth() + 1) + '-' + pad(mon.getUTCDate()),
+      label: (mon.getUTCMonth() + 1) + '월 ' + mon.getUTCDate() + '일부터 ' +
+             (sun.getUTCMonth() + 1) + '월 ' + sun.getUTCDate() + '일까지예요. 월요일마다 새로 시작해요.'
+    };
+  })();
+  rankWeek.textContent = week.label;
+
+  function toScore(v) {
+    var n = Math.floor(Number(v));
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function saveWeekly() {
+    if (!db || !uid || writeBlocked || saving || myWeekBest <= savedBest) return;
+    saving = true;
+    var val = myWeekBest;
+    db.doc('ranks/' + uid).set({ week: week.key, best: val, at: new Date().toISOString() })
+      .then(function () {
+        savedBest = val;
+        retried = false;
+      }, function (e) {
+        if (e && e.code === 'unavailable' && !retried) {
+          retried = true;
+          return new Promise(function (res) { setTimeout(res, 800 + Math.random() * 800); });
+        }
+        writeBlocked = true;
+        renderRank();
+      })
+      .then(function () {
+        saving = false;
+        saveWeekly();
+      });
+  }
+
+  function renderRank() {
+    rankMine.textContent = '이번 주 내 기록은 ' + myWeekBest + '연승이에요';
+    var token = ++renderToken;
+    if (rankState === 'off') {
+      rankOpen.hidden = true;
+      rankList.textContent = '';
+      rankNote.textContent = '이 화면에서는 랭킹을 불러올 수 없어요.';
+      return;
+    }
+    if (rankState === 'loading') {
+      rankNote.textContent = '랭킹을 불러오는 중이에요.';
+      return;
+    }
+    var note = '';
+    if (!rankRows.length) note = '아직 이번 주 기록이 없어요. 1승만 해도 이름이 올라가요.';
+    if (writeBlocked || !uid) note = '이 화면에서는 내 기록이 랭킹에 저장되지 않아요.';
+    rankNote.textContent = note;
+    var ids = rankRows.map(function (r) { return r.id; });
+    var p = (userApi && ids.length) ? userApi.profiles(ids) : Promise.resolve({});
+    p.then(function (ps) {
+      if (token !== renderToken) return;
+      ps = ps || {};
+      rankList.textContent = '';
+      rankRows.forEach(function (r, i) {
+        var li = document.createElement('li');
+        if (r.id === uid) li.className = 'me';
+        var pos = document.createElement('span');
+        pos.className = 'pos';
+        pos.textContent = (i + 1);
+        var who = document.createElement('span');
+        who.className = 'who';
+        var name = (ps[r.id] && ps[r.id].name) || '이름 없는 장사';
+        who.textContent = r.id === uid ? name + ' (나)' : name;
+        var pts = document.createElement('span');
+        pts.className = 'pts';
+        pts.textContent = r.best + '연승';
+        li.appendChild(pos); li.appendChild(who); li.appendChild(pts);
+        rankList.appendChild(li);
+      });
+    });
+  }
+
+  function subscribeRank() {
+    db.collection('ranks').where('week', '==', week.key).orderBy('best', 'desc').limit(20)
+      .onSnapshot(function (snap) {
+        rankRows = snap.docs.map(function (d) {
+          var data = d.data() || {};
+          return { id: d.id, best: toScore(data.best), at: String(data.at || '') };
+        }).filter(function (r) { return r.best > 0; });
+        rankRows.sort(function (a, b) { return b.best - a.best || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0); });
+        rankState = 'ready';
+        renderRank();
+      }, function () {
+        rankState = 'off';
+        renderRank();
+      });
+  }
+
+  function initRank() {
+    if (!window.claude || !window.claude.use) { rankState = 'off'; renderRank(); return; }
+    Promise.all([window.claude.use('db'), window.claude.use('user')]).then(function (r) {
+      db = r[0];
+      userApi = r[1];
+      if (!db) { rankState = 'off'; renderRank(); return; }
+      var idP = userApi ? userApi.id() : Promise.resolve(null);
+      return idP.then(function (id) {
+        uid = id;
+        subscribeRank();
+        if (!uid) return;
+        return db.doc('ranks/' + uid).get().then(function (snap) {
+          var d = snap.exists ? snap.data() : null;
+          if (d && d.week === week.key) {
+            savedBest = toScore(d.best);
+            if (savedBest > myWeekBest) myWeekBest = savedBest;
+          }
+          renderRank();
+          saveWeekly();   // 불러오기 전에 이미 이긴 기록이 있으면 저장
+        });
+      });
+    }).catch(function () { rankState = 'off'; renderRank(); });
+  }
+
+  rankOpen.addEventListener('click', function () {
+    if (state === 'charging' || state === 'clash') return;
+    renderRank();
+    rank.hidden = false;
+    rankClose.focus({ preventScroll: true });
+  });
+  rankClose.addEventListener('click', function () {
+    rank.hidden = true;
+    rankOpen.focus({ preventScroll: true });
+  });
+
+  // ───── 응원하기: 마이크로소프트 스토어 결제로 응원 배지를 사요 ─────
+  // 배지는 꾸미기용이에요. 이길 확률이나 아이템에는 영향을 주지 않아요.
+  // 결제는 스토어에서 설치한 윈도우 앱에서만 동작하고, 그 밖에서는 버튼이 보이지 않아요.
+  var CHEER_ITEM_ID = 'cheer_badge';   // 파트너 센터에 등록한 추가 기능의 제품 ID와 같아야 해요
+  var STORE_BILLING = 'https://store.microsoft.com/billing';
+  var CHEER_KEY = 'touch-ssireum-cheer';
+  var goods = null, cheerItem = null, cheerOwned = false;
+
+  function renderCheer() {
+    cheerBadge.hidden = !cheerOwned;
+    heroStar.style.display = cheerOwned ? '' : 'none';
+    cheerBtn.hidden = cheerOwned || !goods || !cheerItem;
+  }
+  function setCheerOwned(owned) {
+    cheerOwned = owned;
+    try {
+      if (owned) localStorage.setItem(CHEER_KEY, '1');
+      else localStorage.removeItem(CHEER_KEY);
+    } catch (e) {}
+    renderCheer();
+  }
+  function cheerPrice() {
+    try {
+      return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: cheerItem.price.currency })
+        .format(cheerItem.price.value);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function initCheer() {
+    try { cheerOwned = localStorage.getItem(CHEER_KEY) === '1'; } catch (e) {}
+    renderCheer();
+    if (!('getDigitalGoodsService' in window)) return;
+    window.getDigitalGoodsService(STORE_BILLING).then(function (service) {
+      goods = service;
+      return Promise.all([service.getDetails([CHEER_ITEM_ID]), service.listPurchases()]);
+    }).then(function (r) {
+      cheerItem = (r[0] || []).filter(function (i) { return i.itemId === CHEER_ITEM_ID; })[0] || null;
+      // 스토어가 알려 주는 구매 내역을 기준으로 배지를 달아요
+      setCheerOwned((r[1] || []).some(function (p) { return p.itemId === CHEER_ITEM_ID; }));
+    }).catch(function () {
+      // 스토어에서 설치한 앱이 아니면 결제를 쓸 수 없어요. 버튼을 숨긴 채로 둬요.
+    });
+  }
+
+  function buyCheer() {
+    if (!goods || !cheerItem) return;
+    var request;
+    try {
+      request = new PaymentRequest([{ supportedMethods: STORE_BILLING, data: { sku: cheerItem.itemId } }]);
+    } catch (e) {
+      elHint.textContent = '결제를 시작하지 못했어요';
+      return;
+    }
+    request.show().then(function (response) {
+      var done = function () {
+        setCheerOwned(true);
+        elHint.textContent = '응원해 주셔서 고마워요. 응원 배지를 달았어요';
+      };
+      if (response && response.complete) return response.complete('success').then(done, done);
+      done();
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;   // 결제 창을 닫은 경우
+      elHint.textContent = '결제를 완료하지 못했어요. 잠시 뒤에 다시 시도해 주세요';
+    });
+  }
+
+  cheerBtn.addEventListener('click', function () {
+    if (state !== 'idle' || !cheerItem) return;
+    var price = cheerPrice();
+    openSheet(
+      '개발자 응원하기',
+      (price ? '응원 배지를 ' + price + '에 살 수 있어요. ' : '응원 배지를 살 수 있어요. ') +
+        '배지는 화면에 표시되는 꾸미기용이고, 이길 확률이나 아이템에는 영향이 없어요.',
+      (price ? price + ' ' : '') + '결제하기', buyCheer,
+      '닫기', null
+    );
+  });
+
+  setup();
+  dailyGift();
+  renderRank();
+  initRank();
+  initCheer();
+})();
+</script>
+</body>
+</html>
